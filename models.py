@@ -105,7 +105,7 @@ class PAM(nn.Module):
         self.b3 = nn.Conv2d(channels, channels, 1, 1, 0, bias=True)
         self.softmax = nn.Softmax(-1)
         self.rb = ResB(64)
-        self.fusion = nn.Conv2d(channels * 2 + 1, channels, 1, 1, 0, bias=True)
+        self.fusion = nn.Conv2d(channels * 2, channels, 1, 1, 0, bias=True)# + 1, channels, 1, 1, 0, bias=True)
     def __call__(self, x_left, x_right, is_training):
         b, c, h, w = x_left.shape
         buffer_left = self.rb(x_left)
@@ -118,36 +118,36 @@ class PAM(nn.Module):
                           S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
         M_right_to_left = self.softmax(score)
 
-        ### M_{left_to_right}
-        Q = self.b1(buffer_right).permute(0, 2, 3, 1)                                               # B * H * W * C
-        S = self.b2(buffer_left).permute(0, 2, 1, 3)                                                # B * H * C * W
-        score = torch.bmm(Q.contiguous().view(-1, w, c),
-                          S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
-        M_left_to_right = self.softmax(score)
+#         ### M_{left_to_right}
+#         Q = self.b1(buffer_right).permute(0, 2, 3, 1)                                               # B * H * W * C
+#         S = self.b2(buffer_left).permute(0, 2, 1, 3)                                                # B * H * C * W
+#         score = torch.bmm(Q.contiguous().view(-1, w, c),
+#                           S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
+#         M_left_to_right = self.softmax(score)
 
-        ### valid masks
-        V_left_to_right = torch.sum(M_left_to_right.detach(), 1) > 0.1
-        V_left_to_right = V_left_to_right.view(b, 1, h, w)                                          #  B * 1 * H * W
-        V_left_to_right = morphologic_process(V_left_to_right)
-        if is_training==1:
-            V_right_to_left = torch.sum(M_right_to_left.detach(), 1) > 0.1
-            V_right_to_left = V_right_to_left.view(b, 1, h, w)                                      #  B * 1 * H * W
-            V_right_to_left = morphologic_process(V_right_to_left)
+#         ### valid masks
+#         V_left_to_right = torch.sum(M_left_to_right.detach(), 1) > 0.1
+#         V_left_to_right = V_left_to_right.view(b, 1, h, w)                                          #  B * 1 * H * W
+#         V_left_to_right = morphologic_process(V_left_to_right)
+#         if is_training==1:
+#             V_right_to_left = torch.sum(M_right_to_left.detach(), 1) > 0.1
+#             V_right_to_left = V_right_to_left.view(b, 1, h, w)                                      #  B * 1 * H * W
+#             V_right_to_left = morphologic_process(V_right_to_left)
 
-            M_left_right_left = torch.bmm(M_right_to_left, M_left_to_right)
-            M_right_left_right = torch.bmm(M_left_to_right, M_right_to_left)
+#             M_left_right_left = torch.bmm(M_right_to_left, M_left_to_right)
+#             M_right_left_right = torch.bmm(M_left_to_right, M_right_to_left)
 
         ### fusion
         buffer = self.b3(x_right).permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
-        out = self.fusion(torch.cat((buffer, x_left, V_left_to_right), 1))
+        out = self.fusion(torch.cat((buffer, x_left), 1))#, V_left_to_right), 1))
 
         ## output
         if is_training == 1:
-            return out, \
-               (M_right_to_left.contiguous().view(b, h, w, w), M_left_to_right.contiguous().view(b, h, w, w)), \
-               (M_left_right_left.view(b,h,w,w), M_right_left_right.view(b,h,w,w)), \
-               (V_left_to_right, V_right_to_left)
+            return out, (None, None), (None, None), (None, None)#\
+               #(M_right_to_left.contiguous().view(b, h, w, w), M_left_to_right.contiguous().view(b, h, w, w)), \
+               #(M_left_right_left.view(b,h,w,w), M_right_left_right.view(b,h,w,w)), \
+               #(V_left_to_right, V_right_to_left)
         if is_training == 0:
             return out
 
