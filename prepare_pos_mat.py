@@ -39,6 +39,7 @@ def calc_pos_mat(cam, cam2, R, tx, is_test=False):
     E = R.dot(tx)
     cam_coor = calc_pix_3d_coor(cam)
     cam2_coor = calc_pix_3d_coor(cam2)
+    all_lines = []
     for point_x in range(cam.res_h):
         ### for testing ###
         if is_test and point_x != 800//2:
@@ -46,13 +47,12 @@ def calc_pos_mat(cam, cam2, R, tx, is_test=False):
         ###################
         print(f"process line {point_x}...", end='')
         start_time = time.time()
-        all_lines = []
+        line = []
         for point_y in range(cam.res_w):
             ### for testing ###
             if is_test and point_y != 580//2:
                 continue
             ###################
-            line = []
             p = cam_coor[point_x, point_y].reshape(-1, 3).T
             lam = E.dot(p)
             dist = np.abs(cam2_coor.reshape(-1, 3).dot(lam))/np.expand_dims((lam[0, :]**2+lam[1, :]**2)**0.5, axis=0)
