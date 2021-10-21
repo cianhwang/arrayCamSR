@@ -4,6 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage import morphology
 
+xxs = np.load('xxs_flickr1024.npy')
+yys = np.load('yys_flickr1024.npy')
+Pos = (xxs, yys)
+
 class PASSRnet(nn.Module):
     def __init__(self, upscale_factor):
         super(PASSRnet, self).__init__()
@@ -96,6 +100,29 @@ class ResASPPB(nn.Module):
         buffer_3 = self.b_3(torch.cat(buffer_3, 1))
 
         return x + buffer_1 + buffer_2 + buffer_3
+    
+class fePAM(nn.Module):
+    def __init__(self):
+        super(fePAM, self).__init__()
+        self.softmax = nn.Softmax(-1)
+    def forward(self, Q, S, R, Pos):
+        ## Q, S, R: n_batch x C x H x W
+        ## Pos: Pos_x: nparray, H x W x k; Pos_y: nparray, H x W x k
+        n_batch, n_channel, H, W = Q.size()
+        Pos_x, Pos_y = Pos
+        Pos_x, Pos_y = Pos_x.flatten(), Pos_y.flatten() #(H*W*k, )
+        Key = S[:, :, Pos_x, Pos_y] #n_batch x C x H*W*k
+        Key = Key.view(n_batch, n_channel, H*W, -1).permute(0, 2, 1, 3) #n_batch x H*W x C x k
+        Q = Q.permute(0, 2, 3, 1).view(n_batch, H*W, n_channel).unsqueeze(2) # n_batch x H*W x 1 x C
+        score = torch.matmul(Q, Key) #n_batch x H*W x 1 x k
+        M_right_to_left = self.softmax(score) #n_batch x H*W x 1 x k
+
+        Value = R[:, :, Pos_x, Pos_y] #n_batch x C x H*W*k
+        Value = Value.view(n_batch, n_channel, H*W, -1).permute(0, 2, 3, 1) #n_batch x H*W x k x C
+        buffer = torch.matmul(M_right_to_left, Value) #n_batch x H*W x 1 x C
+        buffer = buffer.squeeze().view(n_batch, H, W, n_channel).permute(0, 3, 1, 2)
+
+        return buffer
 
 class PAM(nn.Module):
     def __init__(self, channels):
@@ -105,6 +132,7 @@ class PAM(nn.Module):
         self.b3 = nn.Conv2d(channels, channels, 1, 1, 0, bias=True)
         self.softmax = nn.Softmax(-1)
         self.rb = ResB(64)
+        self.fe_pam = fePAM()
         self.fusion = nn.Conv2d(channels * 2, channels, 1, 1, 0, bias=True)# + 1, channels, 1, 1, 0, bias=True)
     def __call__(self, x_left, x_right, is_training):
         b, c, h, w = x_left.shape
@@ -112,34 +140,17 @@ class PAM(nn.Module):
         buffer_right = self.rb(x_right)
 
         ### M_{right_to_left}
-        Q = self.b1(buffer_left).permute(0, 2, 3, 1)                                                # B * H * W * C
-        S = self.b2(buffer_right).permute(0, 2, 1, 3)                                               # B * H * C * W
-        score = torch.bmm(Q.contiguous().view(-1, w, c),
-                          S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
-        M_right_to_left = self.softmax(score)
-
-#         ### M_{left_to_right}
-#         Q = self.b1(buffer_right).permute(0, 2, 3, 1)                                               # B * H * W * C
-#         S = self.b2(buffer_left).permute(0, 2, 1, 3)                                                # B * H * C * W
+        Q = self.b1(buffer_left)#.permute(0, 2, 3, 1)                                                # B * H * W * C
+        S = self.b2(buffer_right)#.permute(0, 2, 1, 3)                                               # B * H * C * W
 #         score = torch.bmm(Q.contiguous().view(-1, w, c),
 #                           S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
-#         M_left_to_right = self.softmax(score)
-
-#         ### valid masks
-#         V_left_to_right = torch.sum(M_left_to_right.detach(), 1) > 0.1
-#         V_left_to_right = V_left_to_right.view(b, 1, h, w)                                          #  B * 1 * H * W
-#         V_left_to_right = morphologic_process(V_left_to_right)
-#         if is_training==1:
-#             V_right_to_left = torch.sum(M_right_to_left.detach(), 1) > 0.1
-#             V_right_to_left = V_right_to_left.view(b, 1, h, w)                                      #  B * 1 * H * W
-#             V_right_to_left = morphologic_process(V_right_to_left)
-
-#             M_left_right_left = torch.bmm(M_right_to_left, M_left_to_right)
-#             M_right_left_right = torch.bmm(M_left_to_right, M_right_to_left)
+#         M_right_to_left = self.softmax(score)
 
         ### fusion
-        buffer = self.b3(x_right).permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
-        buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
+        R = self.b3(x_right)
+#         buffer = R.permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
+#         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
+        buffer = self.fe_pam(Q, S, R, Pos)
         out = self.fusion(torch.cat((buffer, x_left), 1))#, V_left_to_right), 1))
 
         ## output
