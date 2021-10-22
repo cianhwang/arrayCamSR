@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from utils import *
 import argparse
+from datasets import Train_or_Evalset_DUAL
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -14,7 +15,17 @@ def parse_args():
     parser.add_argument('--gamma', type=float, default=0.5, help='')
     parser.add_argument('--n_epochs', type=int, default=80, help='number of epochs to train')
     parser.add_argument('--n_steps', type=int, default=30, help='number of epochs to update learning rate')
-    parser.add_argument('--trainset_dir', type=str, default='data/train/Flickr1024_patches')
+    #parser.add_argument('--trainset_dir', type=str, default='data/train/Flickr1024_patches')
+    
+    parser.add_argument('--train-file', type=str, required=True)
+    #parser.add_argument('--eval-file', type=str, required=True)
+    parser.add_argument('--n_photon', type=int, default=1000)
+    parser.add_argument('--f_num', type=str, default="48")
+    parser.add_argument('--kernel', type=str, default="jinc")
+    parser.add_argument('--scale', type=int, default=1)
+    parser.add_argument('--num_channels', type=int, default=1)
+    parser.add_argument('--lam', type=float, default=0.633e-6)
+    parser.add_argument('--p', type=float, default=6.6e-6)
     return parser.parse_args()
 
 
@@ -35,12 +46,12 @@ def train(train_loader, cfg):
 
     for idx_epoch in range(cfg.n_epochs):
         scheduler.step()
-        for idx_iter, (HR_left, _, LR_left, LR_right) in enumerate(train_loader):
+        for idx_iter, (LR_left, LR_right, HR_left, Pos) in enumerate(train_loader):
             b, c, h, w = LR_left.shape
             HR_left, LR_left, LR_right  = Variable(HR_left).to(cfg.device), Variable(LR_left).to(cfg.device), Variable(LR_right).to(cfg.device)
 
             SR_left, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
-            (V_left_to_right, V_right_to_left) = net(LR_left, LR_right, is_training=1)
+            (V_left_to_right, V_right_to_left) = net(LR_left, LR_right, is_training=1, Pos=Pos)
 
             ### loss_SR
             loss_SR = criterion_mse(SR_left, HR_left)
@@ -73,7 +84,7 @@ def train(train_loader, cfg):
             loss.backward()
             optimizer.step()
 
-            psnr_epoch.append(cal_psnr(HR_left[:,:,:,64:].data.cpu(), SR_left[:,:,:,64:].data.cpu()))
+            psnr_epoch.append(cal_psnr(HR_left.clamp(0, 1).data.cpu(), SR_left.clamp(0, 1).data.cpu()))
             loss_epoch.append(loss.data.cpu())
 
         if idx_epoch % 1 == 0:
@@ -91,7 +102,7 @@ def train(train_loader, cfg):
             loss_epoch = []
 
 def main(cfg):
-    train_set = TrainSetLoader(dataset_dir=cfg.trainset_dir, cfg=cfg)
+    train_set = Train_or_Evalset_DUAL(cfg, 32, True) #TrainSetLoader(dataset_dir=cfg.trainset_dir, cfg=cfg)
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=cfg.batch_size, shuffle=True)
     train(train_loader, cfg)
 
