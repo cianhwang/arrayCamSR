@@ -3,3 +3,6 @@ log/
 __pycache__/
 results/
 *.npy
+.ipynb_checkpoints/
+*.ipynb
+3/

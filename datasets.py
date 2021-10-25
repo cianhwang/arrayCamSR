@@ -16,11 +16,15 @@ from skimage.measure import block_reduce
 from kernels import Kernels
 import argparse
 
-from dual_align import align_image, load_exr
-
 xxs = np.load('xxs_BLENDER2K_DUAL_x2_downsample.npy').astype(np.int16)
 yys = np.load('yys_BLENDER2K_DUAL_x2_downsample.npy').astype(np.int16)
-        
+
+def load_exr(path):
+    img = cv2.imread(path,cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+    #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = np.mean(img, axis=2)
+    return img
+
 class Camera:
     def __init__(self, lam=0.633e-6, f_num=16, n_photon=1e2, p=6.6e-6, unit=0.1e-6, kernel='jinc',scale=1):
         k_r = int(5*f_num*lam/unit)
