@@ -63,7 +63,7 @@ class Train_or_Evalset_DUAL(Dataset):
                     transforms.RandomCrop(patch_size+256)
             ])
         else:
-            file_a, file_b, file_z = args.eval_file.split(',')
+            file_a, file_b = args.eval_file.split(',')
             self.transform = transforms.Compose([
                     transforms.CenterCrop(patch_size+256)
                 ])
