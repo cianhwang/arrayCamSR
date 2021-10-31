@@ -19,6 +19,27 @@ import argparse
 # xxs = np.load('xxs_BLENDER2K_DUAL_x2_downsample.npy').astype(np.int16)
 # yys = np.load('yys_BLENDER2K_DUAL_x2_downsample.npy').astype(np.int16)
 
+def rot_mat(t):
+    theta = np.arccos(t[2]/np.linalg.norm(t))
+    phi = np.arctan2(t[1], t[0])
+    R = np.array([[np.cos(theta)*np.cos(phi), np.cos(theta)*np.sin(phi), -np.sin(theta)],
+                  [-np.sin(phi), np.cos(phi), 0],
+               [np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)]])
+    return R
+
+def tx_mat(t):
+    return np.array([[0, -t[2], t[1]],
+                     [t[2], 0, -t[0]],
+                     [-t[1], t[0], 0]])
+
+t1 = np.array([7, -7, 5])
+R1 = rot_mat(t1)
+t2 = np.array([7.5, -6.5, 5])
+R2 = rot_mat(t2)
+R = R2.dot(R1.T)
+tx = tx_mat(R1.dot(t2-t1))
+E = R.dot(tx)
+
 res_w2, res_h2 = 1024,768
 f2 = 64. # (mm)
 sensor_width = 36.
@@ -34,21 +55,22 @@ cam_coor2 = np.stack([image_coor2_in_mm[0],
 
 cam_coor = cam_coor2.copy()
 
-E = np.array([[-3.86608326e-04,  3.86608326e-04,  5.34352595e-01],
-       [ 3.35060549e-04, -3.35060549e-04, -4.63105583e-01],
-       [-4.99999738e-01,  4.99999738e-01, -7.23507525e-04]])
+#E = np.array([[-3.86608326e-04,  3.86608326e-04,  5.34352595e-01],
+#        [ 3.35060549e-04, -3.35060549e-04, -4.63105583e-01],
+#        [-4.99999738e-01,  4.99999738e-01, -7.23507525e-04]])
 
-def calc_lam(point, patch_size=16):
-    point_x, point_y = point
-    p = cam_coor[point_x:point_x+patch_size, point_y:point_y+patch_size].reshape(-1, 3).T
+def calc_lam(points):
+    x_l, x_r, y_l, y_r = points
+    p = cam_coor[x_l:x_r, y_l:y_r].reshape(-1, 3).T
     lam = E.dot(p)
     return lam
 
-def calc_pos_mat(point, lam, disparity=64):
-    point_x, point_y = point
-    dist = np.abs(cam_coor2[point_x-disparity:point_x+disparity, point_y-disparity:point_y+disparity].reshape(-1, 3).dot(lam))/np.expand_dims((lam[0, :]**2+lam[1, :]**2)**0.5, axis=0)
-    pps = np.argpartition(dist, 4*disparity-1, axis=0)[:4*disparity-1].T
-    xxs,yys = pps//(2*disparity), pps%(2*disparity)
+def calc_pos_mat(points, lam):
+    x_l, x_r, y_l, y_r = points
+    dist = np.abs(cam_coor2[x_l:x_r, y_l:y_r].reshape(-1, 3).dot(lam))/np.expand_dims((lam[0, :]**2+lam[1, :]**2)**0.5, axis=0)
+    k = max(x_r - x_l, y_r - y_l) #dist < pix_size * 1.414 : but k for each point will be different
+    pps = np.argpartition(dist, k, axis=0)[:k].T
+    xxs,yys = pps//(y_r - y_l), pps%(y_r - y_l)
     return xxs, yys
 
 def load_exr(path):
@@ -92,16 +114,16 @@ class Camera:
         return norm_img_sensor
         
 class Train_or_Evalset_DUAL(Dataset):
-    def __init__(self, args, patch_size = 32, is_train=True):
+    def __init__(self, args, patch_size = (32, 96), is_train=True):
         if is_train:
             file_a, file_b = args.train_file.split(',')
             self.transform = transforms.Compose([
-                    transforms.RandomCrop(patch_size+256)
+                    transforms.RandomCrop(patch_size)
             ])
         else:
             file_a, file_b = args.eval_file.split(',')
             self.transform = transforms.Compose([
-                    transforms.CenterCrop(patch_size+256)
+                    transforms.CenterCrop(patch_size)
                 ])
         self.patch_size = patch_size
         self.files_a = sorted(glob.glob(file_a + '/*.png'))#sorted(glob.glob(file_a + '/*.exr'))
@@ -115,46 +137,34 @@ class Train_or_Evalset_DUAL(Dataset):
                 self.camera.append(Camera(lam=args.lam,f_num=float(f_num), n_photon=args.n_photon, p=args.p, kernel=kernel, scale=args.scale))
     
     def __getitem__(self, idx):
-        img1 = cv2.imread(self.files_a[idx], 0)/255.0#load_exr(self.files_a[idx])/4.0
-        img2 = cv2.imread(self.files_b[idx], 0)/255.0#load_exr(self.files_b[idx])/4.0
-        h, w = img1.shape
-        edge = 128 
-        disparity = 128
+        gt1 = cv2.imread(self.files_a[idx], 0)/255.0#load_exr(self.files_a[idx])/4.0
+        gt2 = cv2.imread(self.files_b[idx], 0)/255.0#load_exr(self.files_b[idx])/4.0
+        img1s, img2s = [], []
+        for i, camera in enumerate(self.camera):
+            img1s.append(camera.forward(gt1))
+            img2s.append(camera.forward(gt2))
+        img1s,img2s = np.stack(img1s,axis=0), np.stack(img2s,axis=0)
+        _, h, w = img1s.shape
         
-        gt = torch.from_numpy(img1)
-        index_map = torch.arange(torch.numel(gt)).view(h, w)
-        gt = torch.stack([gt, index_map], dim=0)[:, disparity:-disparity, disparity:-disparity]
-        gt = self.transform(gt).numpy() # gt[:, 800-128:800-128+32+256, 580-128:580-128+32+256].numpy() #
-        index_map = gt[1].flatten()
+        edge = 128//self.scale
+        index_map = np.arange(h*w).reshape(1, h, w)
+        mixed = np.concatenate([img1s, img2s, index_map], axis=0)
+        assert mixed.shape[0]==3
+        mixed = torch.from_numpy(mixed[..., edge:-edge, edge:-edge])
+        mixed = self.transform(mixed)#mixed[:, 182:182+32, 123:123+96]#
+        index_map = mixed[2].numpy().flatten()
         x_l,y_l = int(index_map[0])//w, int(index_map[0])%w
         x_r,y_r = int(index_map[-1])//w+1, int(index_map[-1])%w+1
         
-        x_c, y_c = x_l + edge, y_l + edge
-
-        img1s = []
-        img2s = []
-        for i, camera in enumerate(self.camera):
-            img1s.append(camera.forward(gt[0]))
-            img2s.append(camera.forward(img2[x_c-disparity-edge:x_c+disparity+edge, y_c-disparity-edge:y_c+disparity+edge]))
-            
-        img1s = np.stack(img1s,axis=0)
-        img2s = np.stack(img2s,axis=0)
+        gt1_t = torch.from_numpy(gt1[x_l*self.scale:x_r*self.scale, y_l*self.scale:y_r*self.scale]).float().unsqueeze(0)
+        gt2_t = torch.from_numpy(gt2[x_l*self.scale:x_r*self.scale, y_l*self.scale:y_r*self.scale]).float().unsqueeze(0)
+        img1_t =  mixed[0:1].float()#.unsqueeze(0)
+        img2_t =  mixed[1:2].float()#.unsqueeze(0)
         
-
-        gt_t = torch.from_numpy(gt[0]).float().unsqueeze(0)[:, edge:-edge, edge:-edge]
-        img_1t =  torch.from_numpy(img1s).float()[:, edge//self.scale:-edge//self.scale, edge//self.scale:-edge//self.scale]
-        img_2t =  torch.from_numpy(img2s).float()[:, edge//self.scale:-edge//self.scale, edge//self.scale:-edge//self.scale]
-        x_l_adj = (x_l//self.scale+edge//self.scale)
-        x_r_adj = (x_r//self.scale-edge//self.scale)
-        y_l_adj = (y_l//self.scale+edge//self.scale)
-        y_r_adj = (y_r//self.scale-edge//self.scale)
-
-#         pos_mat = (xxs[x_l_adj:x_r_adj, y_l_adj:y_r_adj], 
-#                    yys[x_l_adj:x_r_adj, y_l_adj:y_r_adj])
-        lam = calc_lam((x_l_adj, y_l_adj), self.patch_size//self.scale)
-        pos_mat = calc_pos_mat((x_l_adj, y_l_adj), lam, disparity//self.scale)
+        lam = calc_lam((x_l, x_r, y_l, y_r))
+        pos_mat = calc_pos_mat((x_l, x_r, y_l, y_r), lam)
         
-        return img_1t, img_2t, gt_t, pos_mat
+        return img1_t, img2_t, gt1_t, pos_mat
 
     def __len__(self):
         return len(self.files_a)
@@ -177,10 +187,10 @@ if __name__ == '__main__':
     parser.add_argument('--p', type=float, default=1.5e-6)
     
     args = parser.parse_args()
-    trainset = Train_or_Evalset_DUAL(args, 32, True)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=4,
-                                          shuffle=True, num_workers=2)
-    evalset = Train_or_Evalset_DUAL(args, 32, False)
+#     trainset = Train_or_Evalset_DUAL(args, (32, 96), True)
+#     trainloader = torch.utils.data.DataLoader(trainset, batch_size=4,
+#                                           shuffle=True, num_workers=2)
+    evalset = Train_or_Evalset_DUAL(args, (32, 96), False)
     evalloader = torch.utils.data.DataLoader(evalset, batch_size=1,
                                           shuffle=False, num_workers=1)
     dataiter = iter(evalloader)
@@ -191,13 +201,13 @@ if __name__ == '__main__':
     
     xxs, yys = pos_mat
     print(xxs.shape)
-
-    plt.imshow(img_1t[0, 0].numpy(), cmap='gray')
-    plt.show()
-    plt.imshow(img_2t[0, 0].numpy(), cmap='gray')
-    plt.plot(yys[0, 0], xxs[0, 0], color='red')
-    plt.show()
-    plt.imshow(gt_t[0, 0].numpy(), cmap='gray')
+    
+    fig, ax = plt.subplots(2, 2)
+    ax[0][0].imshow(img_1t[0, 0].numpy(), cmap='gray')
+    ax[0][0].plot(80, 28, marker='*', color='red')
+    ax[0][1].imshow(img_2t[0, 0].numpy(), cmap='gray')
+    ax[0][1].plot(sorted(yys[0, 28*96+80]), sorted(xxs[0, 28*96+80]), color='red')
+    ax[1][0].imshow(gt_t[0, 0].numpy(), cmap='gray')
     plt.show()
     
 ###### test pos mat from patch of A -> local of B
