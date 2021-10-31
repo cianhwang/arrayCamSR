@@ -158,8 +158,8 @@ class PAM(nn.Module):
         R = self.b3(x_right)
 #         buffer = R.permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
 #         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
-        buffer = self.fe_pam(Q, S, R, Pos)
-        out, M_right_to_left = self.fusion(torch.cat((buffer, x_left), 1))#, V_left_to_right), 1))
+        buffer, M_right_to_left = self.fe_pam(Q, S, R, Pos)
+        out = self.fusion(torch.cat((buffer, x_left), 1))#, V_left_to_right), 1))
 
         ## output
         if is_training == 1:
