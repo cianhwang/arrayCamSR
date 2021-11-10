@@ -24,9 +24,17 @@ class TrainSetLoader(Dataset):
         img_hr_right = np.array(img_hr_right, dtype=np.float32)
         img_lr_left  = np.array(img_lr_left,  dtype=np.float32)
         img_lr_right = np.array(img_lr_right, dtype=np.float32)
-
-        img_hr_left, img_hr_right, img_lr_left, img_lr_right = augumentation(img_hr_left, img_hr_right, img_lr_left, img_lr_right)
-        return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right)
+        
+        h, w, c = img_lr_left.shape
+        xxs = np.zeros((h, w, w))#, dtype=np.uint16)
+        yys = np.zeros((h, w, w))#, dtype=np.uint16)
+        for i in range(h):
+            for j in range(w):
+                xxs[i, j] = i*np.ones((w,))#, dtype=np.uint16)
+                yys[i, j] = np.arange(w)#, dtype=np.uint16)
+        Pos = (xxs, yys)
+        return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right), Pos
+    
     def __len__(self):
         return len(self.file_list)
 

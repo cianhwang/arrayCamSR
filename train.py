@@ -35,12 +35,12 @@ def train(train_loader, cfg):
 
     for idx_epoch in range(cfg.n_epochs):
         scheduler.step()
-        for idx_iter, (HR_left, _, LR_left, LR_right) in enumerate(train_loader):
+        for idx_iter, (HR_left, _, LR_left, LR_right, Pos) in enumerate(train_loader):
             b, c, h, w = LR_left.shape
             HR_left, LR_left, LR_right  = Variable(HR_left).to(cfg.device), Variable(LR_left).to(cfg.device), Variable(LR_right).to(cfg.device)
 
             SR_left, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
-            (V_left_to_right, V_right_to_left) = net(LR_left, LR_right, is_training=1)
+            (V_left_to_right, V_right_to_left) = net(LR_left, LR_right, is_training=1, Pos=Pos)
 
             ### loss_SR
             loss_SR = criterion_mse(SR_left, HR_left)
