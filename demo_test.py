@@ -19,16 +19,16 @@ def test(test_loader, cfg):
     net = PASSRnet(cfg.scale_factor).to(cfg.device)
     cudnn.benchmark = True
     pretrained_dict = torch.load('./log/x' + str(cfg.scale_factor) + '/PASSRnet_x' + str(cfg.scale_factor) + '.pth')
-    net.load_state_dict(pretrained_dict)
+    net.load_state_dict(pretrained_dict['state_dict'])
 
     psnr_list = []
 
     with torch.no_grad():
-        for idx_iter, (HR_left, _, LR_left, LR_right) in enumerate(test_loader):
+        for idx_iter, (HR_left, _, LR_left, LR_right, Pos) in enumerate(test_loader):
             HR_left, LR_left, LR_right = Variable(HR_left).to(cfg.device), Variable(LR_left).to(cfg.device), Variable(LR_right).to(cfg.device)
             scene_name = test_loader.dataset.file_list[idx_iter]
 
-            SR_left = net(LR_left, LR_right, is_training=0)
+            SR_left, M_right_to_left = net(LR_left, LR_right, is_training=0, Pos=Pos)
             SR_left = torch.clamp(SR_left, 0, 1)
 
             psnr_list.append(cal_psnr(HR_left[:,:,:,64:], SR_left[:,:,:,64:]))
@@ -43,6 +43,7 @@ def test(test_loader, cfg):
 
         ## print results
         print(cfg.dataset + ' mean psnr: ', float(np.array(psnr_list).mean()))
+        
 
 def main(cfg):
     test_set = TestSetLoader(dataset_dir=cfg.testset_dir + '/' + cfg.dataset, scale_factor=cfg.scale_factor)

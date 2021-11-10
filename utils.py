@@ -49,11 +49,21 @@ class TestSetLoader(Dataset):
         hr_image_right = Image.open(self.dataset_dir + '/hr/' + self.file_list[index] + '/hr1.png')
         lr_image_left  = Image.open(self.dataset_dir + '/lr_x' + str(self.scale_factor) + '/' + self.file_list[index] + '/lr0.png')
         lr_image_right = Image.open(self.dataset_dir + '/lr_x' + str(self.scale_factor) + '/' + self.file_list[index] + '/lr1.png')
+        
+        h, w = lr_image_left.height, lr_image_left.width
+        xxs = np.zeros((h, w, w))#, dtype=np.uint16)
+        yys = np.zeros((h, w, w))#, dtype=np.uint16)
+        for i in range(h):
+            for j in range(w):
+                xxs[i, j] = i*np.ones((w,))#, dtype=np.uint16)
+                yys[i, j] = np.arange(w)#, dtype=np.uint16)
+        Pos = (xxs, yys)
+        
         hr_image_left  = ToTensor()(hr_image_left)
         hr_image_right = ToTensor()(hr_image_right)
         lr_image_left  = ToTensor()(lr_image_left)
         lr_image_right = ToTensor()(lr_image_right)
-        return hr_image_left, hr_image_right, lr_image_left, lr_image_right
+        return hr_image_left, hr_image_right, lr_image_left, lr_image_right, Pos
     def __len__(self):
         return len(self.file_list)
 
