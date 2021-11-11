@@ -72,7 +72,7 @@ def train(epoch, model, train_loader, criterion, optimizer, device, writer):
             loss.backward()
             optimizer.step()
 
-            loss_epoch.update(loss.item(), b)
+            loss_epoch.update(loss.item())
             t.set_postfix(loss='{:.6f}'.format(loss_epoch.avg))
             t.update(1)
     
@@ -92,7 +92,7 @@ def valid(epoch, model, valid_loader, device, writer):
                 SR_left, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
                 (V_left_to_right, V_right_to_left) = model(LR_left, LR_right, is_training=1, Pos=Pos)
 
-            psnr_epoch.update(cal_psnr(HR_left[:,:,:,64:].data.cpu(), SR_left[:,:,:,64:].data.cpu()), b)
+            psnr_epoch.update(cal_psnr(HR_left[:,:,:,64:].data.cpu(), SR_left[:,:,:,64:].data.cpu()))
 
             t.set_postfix(psnr='{:.2f}'.format(psnr_epoch.avg))
             t.update(1)
