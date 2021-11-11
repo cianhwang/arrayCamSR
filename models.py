@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 from skimage import morphology
 
 class PASSRnet(nn.Module):
-    def __init__(self, upscale_factor):
+    def __init__(self, upscale_factor, in_channel=3, out_channel=3):
         super(PASSRnet, self).__init__()
         ### feature extraction
         self.init_feature = nn.Sequential(
-            nn.Conv2d(3, 64, 3, 1, 1, bias=False),
+            nn.Conv2d(in_channel, 64, 3, 1, 1, bias=False),
             nn.LeakyReLU(0.1, inplace=True),
             ResB(64),
             ResASPPB(64),
@@ -28,7 +28,7 @@ class PASSRnet(nn.Module):
             nn.Conv2d(64, 64 * upscale_factor ** 2, 1, 1, 0, bias=False),
             nn.PixelShuffle(upscale_factor),
             nn.Conv2d(64, 3, 3, 1, 1, bias=False),
-            nn.Conv2d(3, 3, 3, 1, 1, bias=False)
+            nn.Conv2d(3, out_channel, 3, 1, 1, bias=False)
         )
     def forward(self, x_left, x_right, is_training, Pos):
         ### feature extraction

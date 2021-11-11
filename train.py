@@ -3,6 +3,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from utils import *
+from datasets import TrainSetLoader, ValidSetLoader
 import argparse
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
@@ -42,7 +43,7 @@ def trainer(cfg):
         train(idx_epoch, net, train_loader, criterion_mse, optimizer, cfg.device, writer)
         val_psnr = valid(idx_epoch, net, valid_loader, cfg.device, writer)
 
-        if val_psnr > best_psnr:
+        if val_psnr >= best_psnr:
             print("[*]")
             best_psnr = val_psnr
             save_ckpt({
