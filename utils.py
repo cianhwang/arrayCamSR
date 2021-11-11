@@ -5,13 +5,57 @@ from torchvision.transforms import ToTensor
 import random
 import torch
 import numpy as np
-from skimage import measure
+from skimage import metrics
 from torch.nn import init
 
+class AverageMeter(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 class TrainSetLoader(Dataset):
     def __init__(self, dataset_dir, cfg):
         super(TrainSetLoader, self).__init__()
+        self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
+        self.file_list = os.listdir(self.dataset_dir)
+    def __getitem__(self, index):
+        img_hr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr0.png')
+        img_hr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr1.png')
+        img_lr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/lr0.png')
+        img_lr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/lr1.png')
+
+        img_hr_left  = np.array(img_hr_left,  dtype=np.float32)
+        img_hr_right = np.array(img_hr_right, dtype=np.float32)
+        img_lr_left  = np.array(img_lr_left,  dtype=np.float32)
+        img_lr_right = np.array(img_lr_right, dtype=np.float32)
+        
+        h, w, c = img_lr_left.shape
+        xxs = np.zeros((h, w, w))#, dtype=np.uint16)
+        yys = np.zeros((h, w, w))#, dtype=np.uint16)
+        for i in range(h):
+            for j in range(w):
+                xxs[i, j] = i*np.ones((w,))#, dtype=np.uint16)
+                yys[i, j] = np.arange(w)#, dtype=np.uint16)
+        Pos = (xxs, yys)
+        return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right), Pos
+    
+    def __len__(self):
+        return len(self.file_list)
+
+class ValidSetLoader(Dataset):
+    def __init__(self, dataset_dir, cfg):
+        super(ValidSetLoader, self).__init__()
         self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
         self.file_list = os.listdir(self.dataset_dir)
     def __getitem__(self, index):
@@ -99,7 +143,7 @@ class L1Loss(object):
 def cal_psnr(img1, img2):
     img1_np = np.array(img1.cpu())
     img2_np = np.array(img2.cpu())
-    return measure.compare_psnr(img1_np, img2_np)
+    return metrics.peak_signal_noise_ratio(img1_np, img2_np)
 
 def save_ckpt(state, save_path='./log', filename='checkpoint.pth.tar'):
     torch.save(state, os.path.join(save_path,filename))
@@ -107,4 +151,4 @@ def save_ckpt(state, save_path='./log', filename='checkpoint.pth.tar'):
 def weights_init_xavier(m):
     classname = m.__class__.__name__
     if classname.find('Conv2d') != -1:
-        init.xavier_normal(m.weight.data)
+        init.xavier_normal_(m.weight.data)
