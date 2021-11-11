@@ -115,8 +115,8 @@ def parse_args():
     parser.add_argument('--n_steps', type=int, default=30, help='number of epochs to update learning rate')
     parser.add_argument('--trainset_dir', type=str, default='data/train/Flickr1024_patches')
     parser.add_argument('--validset_dir', type=str, default='data/valid/Flickr1024_patches')
-    parser.add_argument('--outputs_dir', type=str, default='outputs/')
-    parser.add_argument('--logs_dir', type=str, default='logs/')
+    parser.add_argument('--outputs_dir', type=str, default='log/')
+    parser.add_argument('--logs_dir', type=str, default='ckpt/')
     return parser.parse_args()
 
 if __name__ == '__main__':

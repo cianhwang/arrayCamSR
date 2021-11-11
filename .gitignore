@@ -5,3 +5,4 @@ results/
 *.npy
 .ipynb_checkpoints/
 *.ipynb
+ckpt/
