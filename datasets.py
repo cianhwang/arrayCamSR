@@ -51,7 +51,7 @@ image_coor2_in_mm = [image_coor2[0] * pix_size - res_h2//2 * pix_size + 0.5 * pi
             image_coor2[1] * pix_size - res_w2//2 * pix_size + 0.5 * pix_size]
 cam_coor2 = np.stack([image_coor2_in_mm[0], 
             image_coor2_in_mm[1],
-            f2*np.ones_like(image_coor2_in_mm[0])], axis=2)
+            -f2*np.ones_like(image_coor2_in_mm[0])], axis=2)
 
 cam_coor = cam_coor2.copy()
 
