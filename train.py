@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from utils import *
 import argparse
+import os
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -102,6 +103,8 @@ def train(train_loader, valid_loader, cfg):
                 psnr_epoch.append(cal_psnr(HR_left.data.cpu(), SR_left.data.cpu()))
             psnr_list.append(float(np.array(psnr_epoch).mean()))
             print('Epoch----%5d, loss---%f, Valid PSNR---%f' % (idx_epoch + 1, loss_list[-1], float(np.array(psnr_epoch).mean())))
+            if not os.path.exists('log/x' + str(cfg.scale_factor)):
+                os.makedirs('log/x' + str(cfg.scale_factor))
             save_ckpt({
                     'epoch': idx_epoch + 1,
                     'state_dict': net.state_dict(),
