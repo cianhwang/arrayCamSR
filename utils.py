@@ -27,7 +27,12 @@ class L1Loss(object):
 def cal_psnr(img1, img2):
     img1_np = np.array(img1.cpu())
     img2_np = np.array(img2.cpu())
-    return metrics.peak_signal_noise_ratio(img1_np, img2_np)
+    return metrics.peak_signal_noise_ratio(img1_np, img2_np, data_range=1.0)
+
+def cal_ssim(img1, img2):
+    img1_np = np.array(img1.squeeze().cpu()).transpose(1,2,0)
+    img2_np = np.array(img2.squeeze().cpu()).transpose(1,2,0)
+    return metrics.structural_similarity(img1_np, img2_np, multichannel=True, data_range=1.0)
 
 def save_ckpt(state, save_path='./log', filename='checkpoint.pth.tar'):
     torch.save(state, os.path.join(save_path,filename))

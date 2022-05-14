@@ -3,10 +3,10 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from utils import *
-from datasets import TrainSetLoader, ValidSetLoader
 import argparse
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
+from datasets import TrainSetLoader, ValidSetLoader
 
 def trainer(cfg):
     
@@ -92,7 +92,7 @@ def valid(epoch, model, valid_loader, device, writer):
                 SR_left, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
                 (V_left_to_right, V_right_to_left) = model(LR_left, LR_right, is_training=1, Pos=Pos)
 
-            psnr_epoch.update(cal_psnr(HR_left[:,:,:,64:].data.cpu(), SR_left[:,:,:,64:].data.cpu()))
+            psnr_epoch.update(cal_psnr(HR_left.data.cpu(), SR_left.data.cpu()))
 
             t.set_postfix(psnr='{:.2f}'.format(psnr_epoch.avg))
             t.update(1)
@@ -107,15 +107,15 @@ def main(cfg):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scale_factor", type=int, default=4)
+    parser.add_argument("--scale_factor", type=int, default=2)
     parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=2e-4, help='initial learning rate')
     parser.add_argument('--gamma', type=float, default=0.5, help='')
     parser.add_argument('--n_epochs', type=int, default=80, help='number of epochs to train')
     parser.add_argument('--n_steps', type=int, default=30, help='number of epochs to update learning rate')
-    parser.add_argument('--trainset_dir', type=str, default='data/train/Flickr1024_patches')
-    parser.add_argument('--validset_dir', type=str, default='data/valid/Flickr1024_patches')
+    parser.add_argument('--trainset_dir', type=str, default='/groups/djbrady/Qian/blender_patches_corrected')
+    parser.add_argument('--validset_dir', type=str, default='/groups/djbrady/Qian/blender_patches_valid_corrected')
     parser.add_argument('--outputs_dir', type=str, default='log/')
     parser.add_argument('--logs_dir', type=str, default='ckpt/')
     return parser.parse_args()

@@ -101,7 +101,7 @@ class fePAM(nn.Module):
     def __init__(self):
         super(fePAM, self).__init__()
         self.softmax = nn.Softmax(-1)
-    def forward(self, Q, S, R, Pos):
+    def forward(self, Q, S, R, Pos, is_training):
         ## Q: n_batch x C x h x w
         ## S, R: n_batch x C x H x W
         ## Pos: xxs: nparray, n_batch x h x w x k; yys: nparray, n_batch x h x w x k
@@ -121,6 +121,12 @@ class fePAM(nn.Module):
         Q = Q.permute(0, 2, 3, 1).view(n_batch, h*w, n_channel).unsqueeze(2) # n_batch x h*w x 1 x C
         score = torch.matmul(Q, Key) #n_batch x h*w x 1 x k
         M_right_to_left = self.softmax(score) #n_batch x h*w x 1 x k
+#         ### HARDMAX when inference ### 
+#         ### 5/10/22 ##
+#         if is_training == 0:
+#             k = M_right_to_left.size(-1)
+#             M_right_to_left = nn.functional.one_hot(torch.argmax(M_right_to_left, dim=-1), num_classes=k).float()
+#         ##############################
         
         Value = Value.view(n_batch, n_channel, h*w, -1).permute(0, 2, 3, 1) #n_batch x h*w x k x C
         buffer = torch.matmul(M_right_to_left, Value) #n_batch x h*w x 1 x C
@@ -154,7 +160,7 @@ class PAM(nn.Module):
         R = self.b3(x_right)
 #         buffer = R.permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
 #         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
-        buffer, M_right_to_left = self.fe_pam(Q, S, R, Pos)
+        buffer, M_right_to_left = self.fe_pam(Q, S, R, Pos, is_training)
         out = self.fusion(torch.cat((buffer, x_left), 1))#, V_left_to_right), 1))
 
         ## output
