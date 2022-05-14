@@ -3,3 +3,7 @@ log/
 __pycache__/
 results/
 *.npy
+ckpt/
+.ipynb_checkpoints/
+*.ipynb
+measurements/
