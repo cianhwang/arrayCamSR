@@ -15,10 +15,11 @@ def parse_args():
     parser.add_argument('--n_epochs', type=int, default=80, help='number of epochs to train')
     parser.add_argument('--n_steps', type=int, default=30, help='number of epochs to update learning rate')
     parser.add_argument('--trainset_dir', type=str, default='data/train/Flickr1024_patches')
+    parser.add_argument('--validset_dir', type=str, default='data/valid/Flickr1024_patches')
     return parser.parse_args()
 
 
-def train(train_loader, cfg):
+def train(train_loader, valid_loader, cfg):
     net = PASSRnet(cfg.scale_factor).to(cfg.device)
     net.apply(weights_init_xavier)
     cudnn.benchmark = True
@@ -34,6 +35,7 @@ def train(train_loader, cfg):
     psnr_list = []
 
     for idx_epoch in range(cfg.n_epochs):
+        net.train()
         scheduler.step()
         for idx_iter, (HR_left, _, LR_left, LR_right) in enumerate(train_loader):
             b, c, h, w = LR_left.shape
@@ -73,27 +75,49 @@ def train(train_loader, cfg):
             loss.backward()
             optimizer.step()
 
-            psnr_epoch.append(cal_psnr(HR_left[:,:,:,64:].data.cpu(), SR_left[:,:,:,64:].data.cpu()))
+#             psnr_epoch.append(cal_psnr(HR_left[:,:,:,64:].data.cpu(), SR_left[:,:,:,64:].data.cpu()))
             loss_epoch.append(loss.data.cpu())
 
         if idx_epoch % 1 == 0:
             loss_list.append(float(np.array(loss_epoch).mean()))
-            psnr_list.append(float(np.array(psnr_epoch).mean()))
-            print('Epoch----%5d, loss---%f, PSNR---%f' % (idx_epoch + 1, float(np.array(loss_epoch).mean()), float(np.array(psnr_epoch).mean())))
+#             psnr_list.append(float(np.array(psnr_epoch).mean()))
+#             print('Epoch----%5d, loss---%f, PSNR---%f' % (idx_epoch + 1, float(np.array(loss_epoch).mean()), float(np.array(psnr_epoch).mean())))
 
-            save_ckpt({
-                'epoch': idx_epoch + 1,
-                'state_dict': net.state_dict(),
-                'loss': loss_list,
-                'psnr': psnr_list,
-            }, save_path = 'log/x' + str(cfg.scale_factor) + '/', filename='PASSRnet_x' + str(cfg.scale_factor) + '_epoch' + str(idx_epoch + 1) + '.pth.tar')
-            psnr_epoch = []
+#             save_ckpt({
+#                 'epoch': idx_epoch + 1,
+#                 'state_dict': net.state_dict(),
+#                 'loss': loss_list,
+#                 'psnr': psnr_list,
+#             }, save_path = 'log/x' + str(cfg.scale_factor) + '/', filename='PASSRnet_x' + str(cfg.scale_factor) + '_epoch' + str(idx_epoch + 1) + '.pth.tar')
+#             psnr_epoch = []
             loss_epoch = []
+            
+            net.eval()
+            for idx_iter, (HR_left, _, LR_left, LR_right) in enumerate(valid_loader):
+                b, c, h, w = LR_left.shape
+                HR_left, LR_left, LR_right  = Variable(HR_left).to(cfg.device), Variable(LR_left).to(cfg.device), Variable(LR_right).to(cfg.device)
+
+                SR_left = net(LR_left, LR_right, is_training=0)
+
+                psnr_epoch.append(cal_psnr(HR_left.data.cpu(), SR_left.data.cpu()))
+            psnr_list.append(float(np.array(psnr_epoch).mean()))
+            print('Epoch----%5d, loss---%f, Valid PSNR---%f' % (idx_epoch + 1, loss_list[-1], float(np.array(psnr_epoch).mean())))
+            save_ckpt({
+                    'epoch': idx_epoch + 1,
+                    'state_dict': net.state_dict(),
+                    'loss': loss_list,
+                    'psnr': psnr_list,
+                }, save_path = 'log/x' + str(cfg.scale_factor) + '/', filename='PASSRnet_x' + str(cfg.scale_factor) + '_epoch' + str(idx_epoch + 1) + '.pth.tar')
+            psnr_epoch = []
+            
+            
 
 def main(cfg):
     train_set = TrainSetLoader(dataset_dir=cfg.trainset_dir, cfg=cfg)
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=cfg.batch_size, shuffle=True)
-    train(train_loader, cfg)
+    valid_set = ValidSetLoader(dataset_dir=cfg.validset_dir, cfg=cfg)
+    valid_loader = DataLoader(dataset=valid_set, num_workers=1, batch_size=1, shuffle=False)
+    train(train_loader, valid_loader, cfg)
 
 if __name__ == '__main__':
     cfg = parse_args()

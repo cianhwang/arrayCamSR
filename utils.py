@@ -29,6 +29,27 @@ class TrainSetLoader(Dataset):
         return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right)
     def __len__(self):
         return len(self.file_list)
+    
+class ValidSetLoader(Dataset):
+    def __init__(self, dataset_dir, cfg):
+        super(ValidSetLoader, self).__init__()
+        self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
+        self.file_list = os.listdir(self.dataset_dir)
+    def __getitem__(self, index):
+        img_hr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr0.png')
+        img_hr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr1.png')
+        img_lr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/lr0.png')
+        img_lr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/lr1.png')
+
+        img_hr_left  = np.array(img_hr_left,  dtype=np.float32)
+        img_hr_right = np.array(img_hr_right, dtype=np.float32)
+        img_lr_left  = np.array(img_lr_left,  dtype=np.float32)
+        img_lr_right = np.array(img_lr_right, dtype=np.float32)
+
+        #img_hr_left, img_hr_right, img_lr_left, img_lr_right = augumentation(img_hr_left, img_hr_right, img_lr_left, img_lr_right)
+        return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right)
+    def __len__(self):
+        return len(self.file_list)
 
 class TestSetLoader(Dataset):
     def __init__(self, dataset_dir, scale_factor):
