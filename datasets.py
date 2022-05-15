@@ -8,7 +8,7 @@ import numpy as np
 
 class TrainSetLoaderFlickr1024(Dataset):
     def __init__(self, dataset_dir, cfg):
-        super(TrainSetLoader, self).__init__()
+        super(TrainSetLoaderFlickr1024, self).__init__()
         self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
         self.file_list = os.listdir(self.dataset_dir)
     def __getitem__(self, index):
@@ -37,7 +37,7 @@ class TrainSetLoaderFlickr1024(Dataset):
 
 class ValidSetLoaderFlickr1024(Dataset):
     def __init__(self, dataset_dir, cfg):
-        super(ValidSetLoader, self).__init__()
+        super(ValidSetLoaderFlickr1024, self).__init__()
         self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
         self.file_list = os.listdir(self.dataset_dir)
     def __getitem__(self, index):
