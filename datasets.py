@@ -68,7 +68,7 @@ class TrainSetLoader(Dataset):
     def __init__(self, dataset_dir, cfg):
         super(TrainSetLoader, self).__init__()
         self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
-        self.file_list = os.listdir(self.dataset_dir)
+        self.file_list = [d for d in os.listdir(self.dataset_dir) if os.path.isdir(os.path.join(self.dataset_dir, d))]
     def __getitem__(self, index):
         img_hr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr0.png')
         img_hr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr1.png')
@@ -81,8 +81,8 @@ class TrainSetLoader(Dataset):
         img_lr_right = np.array(img_lr_right, dtype=np.float32)
         
         num = self.file_list[index].split('_')[-1]
-        xxs = np.load(f'/groups/djbrady/Qian/blender_patches_corrected/xxs_{num}.npy')
-        yys = np.load(f'/groups/djbrady/Qian/blender_patches_corrected/yys_{num}.npy')
+        xxs = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
+        yys = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
         Pos = (xxs, yys)
         return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right), Pos
     
@@ -93,7 +93,7 @@ class ValidSetLoader(Dataset):
     def __init__(self, dataset_dir, cfg):
         super(ValidSetLoader, self).__init__()
         self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
-        self.file_list = os.listdir(self.dataset_dir)
+        self.file_list = [d for d in os.listdir(self.dataset_dir) if os.path.isdir(os.path.join(self.dataset_dir, d))]
     def __getitem__(self, index):
         img_hr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr0.png')
         img_hr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr1.png')
@@ -106,8 +106,8 @@ class ValidSetLoader(Dataset):
         img_lr_right = np.array(img_lr_right, dtype=np.float32)
         
         num = self.file_list[index].split('_')[-1]
-        xxs = np.load(f'/groups/djbrady/Qian/blender_patches_valid_corrected/xxs_{num}.npy')
-        yys = np.load(f'/groups/djbrady/Qian/blender_patches_valid_corrected/yys_{num}.npy')
+        xxs = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
+        yys = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
         Pos = (xxs, yys)
         return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), toTensor(img_lr_right), Pos
     
