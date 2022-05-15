@@ -10,12 +10,12 @@ from datasets import TrainSetLoader, ValidSetLoader
 
 def trainer(cfg):
     
-    outputs_dir = os.path.join(cfg.outputs_dir)
+    outputs_dir = os.path.join(cfg.outputs_dir, f'x{cfg.scale_factor}')
     print('[*] Saving outputs to {}'.format(outputs_dir))
     if not os.path.exists(outputs_dir):
         os.makedirs(outputs_dir)
         
-    logs_dir = os.path.join(cfg.logs_dir)
+    logs_dir = os.path.join(cfg.logs_dir, f'x{cfg.scale_factor}')
     print('[*] Saving tensorboard logs to {}'.format(logs_dir))
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)

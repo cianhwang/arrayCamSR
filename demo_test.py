@@ -22,7 +22,7 @@ def test(test_loader, cfg):
     net = nn.DataParallel(net)
     net.eval()
     cudnn.benchmark = True
-    pretrained_dict = torch.load(cfg.model_dir+'/best.pth.tar')
+    pretrained_dict = torch.load(cfg.model_dir+f'/x{cfg.scale_factor}/best.pth.tar')
     net.load_state_dict(pretrained_dict['state_dict'])
 
     psnr_list = AverageMeter()
@@ -63,7 +63,7 @@ def test(test_loader, cfg):
 #             break
 
     ## print results
-    print('mean psnr: {:.2f} | ssim: {:.4f}'.format(psnr_list.avg, ssim_list.avg))
+    print('mean psnr/ssim: {:.2f}/{:.4f}'.format(psnr_list.avg, ssim_list.avg))
         
 
 def main(cfg):
