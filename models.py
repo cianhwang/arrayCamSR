@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from skimage import morphology
 
 class PASSRnet(nn.Module):
-    def __init__(self, upscale_factor, in_channel=3, out_channel=3):
+    def __init__(self, upscale_factor, in_channel=3, out_channel=3, num_input=2):
         super(PASSRnet, self).__init__()
         ### feature extraction
         self.init_feature = nn.Sequential(
@@ -18,7 +18,7 @@ class PASSRnet(nn.Module):
             ResB(64),
         )
         ### paralax attention
-        self.pam = PAM(64)
+        self.pam = PAM(64, num_input)
         ### upscaling
         self.upscale = nn.Sequential(
             ResB(64),
@@ -30,21 +30,23 @@ class PASSRnet(nn.Module):
             nn.Conv2d(64, 3, 3, 1, 1, bias=False),
             nn.Conv2d(3, out_channel, 3, 1, 1, bias=False)
         )
-    def forward(self, x_left, x_right, is_training, Pos):
+    def forward(self, x_left, x_rights, is_training, Pos):
+        if not isinstance(x_rights, list):
+            x_rights = [x_rights]
         ### feature extraction
         buffer_left = self.init_feature(x_left)
-        buffer_right = self.init_feature(x_right)
+        buffer_rights = [self.init_feature(x_right) for x_right in x_rights]
         if is_training == 1:
             ### parallax attention
             buffer, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
-            (V_left_to_right, V_right_to_left) = self.pam(buffer_left, buffer_right, is_training, Pos)
+            (V_left_to_right, V_right_to_left) = self.pam(buffer_left, buffer_rights, is_training, Pos)
             ### upscaling
             out = self.upscale(buffer)
             return out, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
                    (V_left_to_right, V_right_to_left)
         if is_training == 0:
             ### parallax attention
-            buffer, M_right_to_left = self.pam(buffer_left, buffer_right, is_training, Pos)
+            buffer, M_right_to_left = self.pam(buffer_left, buffer_rights, is_training, Pos)
             ### upscaling
             out = self.upscale(buffer)
             return out, M_right_to_left
@@ -135,33 +137,41 @@ class fePAM(nn.Module):
         return buffer, M_right_to_left
 
 class PAM(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, num_input=2):
         super(PAM, self).__init__()
         self.b1 = nn.Conv2d(channels, channels, 1, 1, 0, bias=True)
-        self.b2 = nn.Conv2d(channels, channels, 1, 1, 0, bias=True)
-        self.b3 = nn.Conv2d(channels, channels, 1, 1, 0, bias=True)
+        self.b2s = nn.ModuleList([nn.Conv2d(channels, channels, 1, 1, 0, bias=True) for i in range(num_input-1)])
+        self.b3s = nn.ModuleList([nn.Conv2d(channels, channels, 1, 1, 0, bias=True) for i in range(num_input-1)])
         self.softmax = nn.Softmax(-1)
         self.rb = ResB(64)
         self.fe_pam = fePAM()
-        self.fusion = nn.Conv2d(channels * 2, channels, 1, 1, 0, bias=True)# + 1, channels, 1, 1, 0, bias=True)
-    def __call__(self, x_left, x_right, is_training, Pos):
+        self.fusion = nn.Conv2d(channels * num_input, channels, 1, 1, 0, bias=True)# + 1, channels, 1, 1, 0, bias=True)
+    def __call__(self, x_left, x_rights, is_training, Pos):
         b, c, h, w = x_left.shape
         buffer_left = self.rb(x_left)
-        buffer_right = self.rb(x_right)
+        if not isinstance(x_rights, list):
+            x_rights = [x_rights]
+        buffer_rights = [self.rb(x_right) for x_right in x_rights]
 
         ### M_{right_to_left}
         Q = self.b1(buffer_left)#.permute(0, 2, 3, 1)                                                # B * H * W * C
-        S = self.b2(buffer_right)#.permute(0, 2, 1, 3)                                               # B * H * C * W
+        Ss = [self.b2(buffer_right) for (self.b2, buffer_right) in zip(self.b2s, buffer_rights)]#.permute(0, 2, 1, 3)  # B * H * C * W
 #         score = torch.bmm(Q.contiguous().view(-1, w, c),
 #                           S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
 #         M_right_to_left = self.softmax(score)
 
         ### fusion
-        R = self.b3(x_right)
+        Rs = [self.b3(buffer_right) for (self.b3, buffer_right) in zip(self.b3s, buffer_rights)]
 #         buffer = R.permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
 #         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
-        buffer, M_right_to_left = self.fe_pam(Q, S, R, Pos, is_training)
-        out = self.fusion(torch.cat((buffer, x_left), 1))#, V_left_to_right), 1))
+        buffers = []
+        M_right_to_lefts = []
+        for S, R in zip(Ss, Rs):
+            buffer, M_right_to_left = self.fe_pam(Q, S, R, Pos, is_training)
+            buffers.append(buffer)
+            M_right_to_lefts.append(M_right_to_left)
+        buffers.append(x_left)
+        out = self.fusion(torch.cat(tuple(buffers), 1))#, V_left_to_right), 1))
 
         ## output
         if is_training == 1:
@@ -170,20 +180,4 @@ class PAM(nn.Module):
                #(M_left_right_left.view(b,h,w,w), M_right_left_right.view(b,h,w,w)), \
                #(V_left_to_right, V_right_to_left)
         if is_training == 0:
-            return out, M_right_to_left
-
-def morphologic_process(mask):
-    device = mask.device
-    b,_,_,_ = mask.shape
-    mask = 1-mask.float()
-    mask_np = mask.cpu().numpy().astype(bool)
-    mask_np = morphology.remove_small_objects(mask_np, 20, 2)
-    mask_np = morphology.remove_small_holes(mask_np, 10, 2)
-    for idx in range(b):
-        buffer = np.pad(mask_np[idx,0,:,:],((3,3),(3,3)),'constant')
-        buffer = morphology.binary_closing(buffer, morphology.disk(3))
-        mask_np[idx,0,:,:] = buffer[3:-3,3:-3]
-    mask_np = 1-mask_np
-    mask_np = mask_np.astype(float)
-
-    return torch.from_numpy(mask_np).float().to(device)
+            return out, M_right_to_lefts
