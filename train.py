@@ -1,12 +1,12 @@
 from models import *
 from torch.autograd import Variable
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset, ChainDataset, Subset
 import torch.backends.cudnn as cudnn
 from utils import *
 import argparse
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from datasets import TrainSetLoader, ValidSetLoader
+from datasets import TrainSetLoader
 
 def trainer(cfg):
     
@@ -32,9 +32,15 @@ def trainer(cfg):
     optimizer = torch.optim.Adam([paras for paras in net.parameters() if paras.requires_grad == True], lr=cfg.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=cfg.n_steps, gamma=cfg.gamma)
     
-    train_set = TrainSetLoader(dataset_dir=cfg.trainset_dir, cfg=cfg)
+    train_dirs = cfg.trainset_dir.split(',')
+    train_sets = [TrainSetLoader(dataset_dir=train_dir, cfg=cfg) for train_dir in train_dirs]
+    train_set = ConcatDataset(train_sets)
+    #train_set = Subset(train_set, list(range(0, len(train_set), 50)))
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=cfg.batch_size, shuffle=True)
-    valid_set = ValidSetLoader(dataset_dir=cfg.validset_dir, cfg=cfg)
+    valid_dirs = cfg.validset_dir.split(',')
+    valid_sets = [TrainSetLoader(dataset_dir=valid_dir, cfg=cfg) for valid_dir in valid_dirs]
+    valid_set = ConcatDataset(valid_sets)
+    #valid_set = Subset(valid_set, list(range(0, len(valid_set), 50)))
     valid_loader = DataLoader(dataset=valid_set, num_workers=1, batch_size=1, shuffle=False)
 
     best_psnr = 0.0
@@ -114,8 +120,8 @@ def parse_args():
     parser.add_argument('--gamma', type=float, default=0.5, help='')
     parser.add_argument('--n_epochs', type=int, default=80, help='number of epochs to train')
     parser.add_argument('--n_steps', type=int, default=30, help='number of epochs to update learning rate')
-    parser.add_argument('--trainset_dir', type=str, default='/groups/djbrady/Qian/blender_patches_corrected')
-    parser.add_argument('--validset_dir', type=str, default='/groups/djbrady/Qian/blender_patches_valid_corrected')
+    parser.add_argument('--trainset_dir', type=str, default='/groups/djbrady/Qian/blender_patches_1k,/groups/djbrady/Qian/Flickr1024_patches_train')
+    parser.add_argument('--validset_dir', type=str, default='/groups/djbrady/Qian/Flickr1024_patches_valid')
     parser.add_argument('--outputs_dir', type=str, default='log/')
     parser.add_argument('--logs_dir', type=str, default='ckpt/')
     return parser.parse_args()
