@@ -146,11 +146,13 @@ class PAM(nn.Module):
         self.rb = ResB(64)
         self.fe_pam = fePAM()
         self.fusion = nn.Conv2d(channels * num_input, channels, 1, 1, 0, bias=True)# + 1, channels, 1, 1, 0, bias=True)
-    def __call__(self, x_left, x_rights, is_training, Pos):
+    def __call__(self, x_left, x_rights, is_training, Poss):
         b, c, h, w = x_left.shape
         buffer_left = self.rb(x_left)
         if not isinstance(x_rights, list):
             x_rights = [x_rights]
+        if not any(isinstance(i, list) for i in Poss):
+            Poss = [Poss]
         buffer_rights = [self.rb(x_right) for x_right in x_rights]
 
         ### M_{right_to_left}
@@ -166,7 +168,7 @@ class PAM(nn.Module):
 #         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
         buffers = []
         M_right_to_lefts = []
-        for S, R in zip(Ss, Rs):
+        for S, R, Pos in zip(Ss, Rs, Poss):
             buffer, M_right_to_left = self.fe_pam(Q, S, R, Pos, is_training)
             buffers.append(buffer)
             M_right_to_lefts.append(M_right_to_left)
