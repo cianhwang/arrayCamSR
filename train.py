@@ -64,12 +64,15 @@ def train(epoch, model, train_loader, criterion, optimizer, device, writer):
     
     with tqdm(total=len(train_loader)) as t:
         t.set_description(f'epoch {epoch+1}')
-        for idx_iter, (HR_left, _, LR_left, LR_right, Pos) in enumerate(train_loader):
+        for idx_iter, (HR_left, _, LR_left, LR_rights, Pos) in enumerate(train_loader):
             b, c, h, w = LR_left.shape
-            HR_left, LR_left, LR_right  = HR_left.to(device), LR_left.to(device), LR_right.to(device)
-
+            HR_left, LR_left = HR_left.to(device), LR_left.to(device)
+            if isinstance(LR_rights, list):
+                LR_rights = [LR_right.to(device) for LR_right in LR_rights]
+            else:
+                LR_rights = LR_rights.to(device)
             SR_left, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
-            (V_left_to_right, V_right_to_left) = model(LR_left, LR_right, is_training=1, Pos=Pos)
+            (V_left_to_right, V_right_to_left) = model(LR_left, LR_rights, is_training=1, Pos=Pos)
 
             ### loss_SR
             loss = criterion(SR_left, HR_left)
@@ -90,13 +93,17 @@ def valid(epoch, model, valid_loader, device, writer):
     
     with tqdm(total=len(valid_loader)) as t:
         t.set_description('validate')
-        for idx_iter, (HR_left, _, LR_left, LR_right, Pos) in enumerate(valid_loader):
+        for idx_iter, (HR_left, _, LR_left, LR_rights, Pos) in enumerate(valid_loader):
             b, c, h, w = LR_left.shape
-            HR_left, LR_left, LR_right = HR_left.to(device), LR_left.to(device), LR_right.to(device)
+            HR_left, LR_left = HR_left.to(device), LR_left.to(device)
+            if isinstance(LR_rights, list):
+                LR_rights = [LR_right.to(device) for LR_right in LR_rights]
+            else:
+                LR_rights = LR_rights.to(device)
 
             with torch.no_grad():
                 SR_left, (M_right_to_left, M_left_to_right), (M_left_right_left, M_right_left_right), \
-                (V_left_to_right, V_right_to_left) = model(LR_left, LR_right, is_training=1, Pos=Pos)
+                (V_left_to_right, V_right_to_left) = model(LR_left, LR_rights, is_training=1, Pos=Pos)
 
             psnr_epoch.update(cal_psnr(HR_left.data.cpu(), SR_left.data.cpu()))
 
