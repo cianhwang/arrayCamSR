@@ -157,13 +157,17 @@ class PAM(nn.Module):
 
         ### M_{right_to_left}
         Q = self.b1(buffer_left)#.permute(0, 2, 3, 1)                                                # B * H * W * C
-        Ss = [self.b2(buffer_right) for (self.b2, buffer_right) in zip(self.b2s, buffer_rights)]#.permute(0, 2, 1, 3)  # B * H * C * W
+        Ss, Rs = [], []
+        for i in range(len(buffer_rights)):
+            Ss.append(self.b2s[i](buffer_rights[i]))
+            Rs.append(self.b3s[i](buffer_rights[i]))
+        #Ss = [self.b2(buffer_right) for (self.b2, buffer_right) in zip(self.b2s, buffer_rights)]#.permute(0, 2, 1, 3)  # B * H * C * W
 #         score = torch.bmm(Q.contiguous().view(-1, w, c),
 #                           S.contiguous().view(-1, c, w))                                            # (B*H) * W * W
 #         M_right_to_left = self.softmax(score)
 
         ### fusion
-        Rs = [self.b3(buffer_right) for (self.b3, buffer_right) in zip(self.b3s, buffer_rights)]
+        #Rs = [self.b3(buffer_right) for (self.b3, buffer_right) in zip(self.b3s, buffer_rights)]
 #         buffer = R.permute(0,2,3,1).contiguous().view(-1, w, c)                      # (B*H) * W * C
 #         buffer = torch.bmm(M_right_to_left, buffer).contiguous().view(b, h, w, c).permute(0,3,1,2)  #  B * C * H * W
         buffers = []
