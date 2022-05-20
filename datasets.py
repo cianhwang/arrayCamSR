@@ -40,6 +40,45 @@ class TrainSetLoader(Dataset):
     
     def __len__(self):
         return len(self.file_list)
+    
+class TrainSetMultiLoader(Dataset):
+    def __init__(self, dataset_dir, cfg):
+        super(TrainSetMultiLoader, self).__init__()
+        self.dataset_dir = dataset_dir + '/patches_x' + str(cfg.scale_factor)
+        self.file_list = [d for d in os.listdir(self.dataset_dir) if os.path.isdir(os.path.join(self.dataset_dir, d))]
+    def __getitem__(self, index):
+        img_hr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr0.png')
+        img_hr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/hr1.png')
+        img_lr_left  = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/lr0.png').convert('L')
+        img_lr_right = Image.open(self.dataset_dir + '/' + self.file_list[index] + '/lr1.png')
+
+        img_hr_left  = np.array(img_hr_left,  dtype=np.float32)
+        img_hr_right = np.array(img_hr_right, dtype=np.float32)
+        img_lr_left  = np.array(img_lr_left,  dtype=np.float32)[:, :, np.newaxis]
+        img_lr_right = np.array(img_lr_right, dtype=np.float32)
+        img_lr_rights = [img_lr_right[...,0:1], img_lr_right[...,1:2], img_lr_right[...,2:3]]
+
+        h, w, c = img_lr_left.shape
+        num = self.file_list[index].split('_')[-1]
+        Pos = []
+        for i in range(len(img_lr_rights)):
+            if os.path.exists(f'{self.dataset_dir}/xxs_{num}.npy'):
+                xxs = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
+                yys = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
+            else:
+                xxs = np.zeros((h, w, w), dtype=np.int16)
+                yys = np.zeros((h, w, w), dtype=np.int16)
+                for i in range(h):
+                    for j in range(w):
+                        xxs[i, j] = i*np.ones((w,), dtype=np.int16)
+                        yys[i, j] = np.arange(w, dtype=np.int16)
+                xxs, yys = xxs.reshape((h*w, w)), yys.reshape((h*w, w))
+            Pos.append((xxs, yys))
+        img_lr_rights = [toTensor(img_lr_right) for img_lr_right in img_lr_rights]
+        return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), img_lr_rights, Pos
+    
+    def __len__(self):
+        return len(self.file_list)
 
 class TestSetLoader(Dataset):
     def __init__(self, dataset_dir, scale_factor):
@@ -75,6 +114,44 @@ class TestSetLoader(Dataset):
     def __len__(self):
         return len(self.file_list)
 
+class TestSetMultiLoader(Dataset):
+    def __init__(self, dataset_dir, scale_factor):
+        super(TestSetMultiLoader, self).__init__()
+        self.dataset_dir = dataset_dir
+        self.scale_factor = scale_factor
+        self.file_list = os.listdir(dataset_dir + '/hr')
+    def __getitem__(self, index):
+        img_hr_left  = Image.open(self.dataset_dir + '/hr/' + self.file_list[index] + '/hr0.png')
+        img_hr_right = Image.open(self.dataset_dir + '/hr/' + self.file_list[index] + '/hr1.png')
+        img_lr_left  = Image.open(self.dataset_dir + '/lr_x' + str(self.scale_factor) + '/' + self.file_list[index] + '/lr0.png').convert('L')
+        img_lr_right = Image.open(self.dataset_dir + '/lr_x' + str(self.scale_factor) + '/' + self.file_list[index] + '/lr1.png')
+        
+        img_hr_left  = np.array(img_hr_left,  dtype=np.float32)
+        img_hr_right = np.array(img_hr_right, dtype=np.float32)
+        img_lr_left  = np.array(img_lr_left,  dtype=np.float32)[..., np.newaxis]
+        img_lr_right = np.array(img_lr_right, dtype=np.float32)
+        img_lr_rights = [img_lr_right[...,0:1], img_lr_right[...,1:2], img_lr_right[...,2:3]]
+
+        h, w, c = img_lr_left.shape
+        Pos = []
+        for i in range(len(img_lr_rights)):
+            jn = 80
+            xxs = np.zeros((h, w, jn))#, dtype=np.uint16)
+            yys = np.zeros((h, w, jn))#, dtype=np.uint16)
+            for i in range(h):
+                for j in range(w):
+                    xxs[i, j] = i*np.ones((jn,))#, dtype=np.uint16)
+                    if j < jn: #j > w - jn: #
+                        a, b = 0, jn#w-jn, w #
+                    else:
+                        a, b = j-jn, j #j, j+jn #
+                    yys[i, j] = np.arange(a, b)#, dtype=np.uint16)
+            Pos.append((xxs, yys))
+        img_lr_rights = [toTensor(img_lr_right) for img_lr_right in img_lr_rights]
+        return toTensor(img_hr_left), toTensor(img_hr_right), toTensor(img_lr_left), img_lr_rights, Pos
+    def __len__(self):
+        return len(self.file_list)
+    
 def augumentation(hr_image_left, hr_image_right, lr_image_left, lr_image_right):
         if random.random()<0.5:     # flip horizonly
             lr_image_left = lr_image_left[:, ::-1, :]
