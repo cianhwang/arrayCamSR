@@ -6,7 +6,7 @@ from utils import *
 import argparse
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from datasets import TrainSetLoader
+from datasets import TrainSetLoader, TrainSetMultiLoader
 
 def trainer(cfg):
     
@@ -22,8 +22,8 @@ def trainer(cfg):
         
     writer = SummaryWriter(logs_dir)
     
-    net = PASSRnet(cfg.scale_factor)
-    net = nn.DataParallel(net).to(cfg.device)
+    net = PASSRnet(cfg.scale_factor, in_channel=1, num_input=4).to(cfg.device)
+    net = nn.DataParallel(net)
     net.apply(weights_init_xavier)
     cudnn.benchmark = True
 
@@ -33,14 +33,14 @@ def trainer(cfg):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=cfg.n_steps, gamma=cfg.gamma)
     
     train_dirs = cfg.trainset_dir.split(',')
-    train_sets = [TrainSetLoader(dataset_dir=train_dir, cfg=cfg) for train_dir in train_dirs]
+    train_sets = [TrainSetMultiLoader(dataset_dir=train_dir, cfg=cfg) for train_dir in train_dirs]
     train_set = ConcatDataset(train_sets)
-    #train_set = Subset(train_set, list(range(0, len(train_set), 50)))
+#     train_set = Subset(train_set, list(range(0, len(train_set), 200)))
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=cfg.batch_size, shuffle=True)
     valid_dirs = cfg.validset_dir.split(',')
-    valid_sets = [TrainSetLoader(dataset_dir=valid_dir, cfg=cfg) for valid_dir in valid_dirs]
+    valid_sets = [TrainSetMultiLoader(dataset_dir=valid_dir, cfg=cfg) for valid_dir in valid_dirs]
     valid_set = ConcatDataset(valid_sets)
-    #valid_set = Subset(valid_set, list(range(0, len(valid_set), 50)))
+#     valid_set = Subset(valid_set, list(range(0, len(valid_set), 200)))
     valid_loader = DataLoader(dataset=valid_set, num_workers=1, batch_size=1, shuffle=False)
 
     best_psnr = 0.0
@@ -122,7 +122,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scale_factor", type=int, default=2)
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--lr', type=float, default=2e-4, help='initial learning rate')
     parser.add_argument('--gamma', type=float, default=0.5, help='')
     parser.add_argument('--n_epochs', type=int, default=80, help='number of epochs to train')
