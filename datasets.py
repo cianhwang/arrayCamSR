@@ -61,7 +61,7 @@ class TrainSetMultiLoader(Dataset):
         h, w, c = img_lr_left.shape
         num = self.file_list[index].split('_')[-1]
         Pos = []
-        for i in range(len(img_lr_rights)):
+        for k in range(len(img_lr_rights)):
             if os.path.exists(f'{self.dataset_dir}/xxs_{num}.npy'):
                 xxs = np.load(f'{self.dataset_dir}/xxs_{num}.npy')
                 yys = np.load(f'{self.dataset_dir}/yys_{num}.npy')
@@ -134,7 +134,7 @@ class TestSetMultiLoader(Dataset):
 
         h, w, c = img_lr_left.shape
         Pos = []
-        for i in range(len(img_lr_rights)):
+        for k in range(len(img_lr_rights)):
             jn = 80
             xxs = np.zeros((h, w, jn))#, dtype=np.uint16)
             yys = np.zeros((h, w, jn))#, dtype=np.uint16)
